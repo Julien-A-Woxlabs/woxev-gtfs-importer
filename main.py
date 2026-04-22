@@ -20,6 +20,8 @@ app.add_middleware(
 XANO_API_KEY = os.getenv("XANO_API_KEY")
 XANO_BASE_URL = os.getenv("XANO_BASE_URL")
 
+print("DEBUG - XANO_BASE_URL =", XANO_BASE_URL)   # pour voir dans les logs
+
 headers = {
     "Authorization": f"Bearer {XANO_API_KEY}",
     "Content-Type": "application/json"
@@ -32,6 +34,8 @@ async def import_gtfs(
     version_name: str = Form(...)
 ):
     try:
+        print(f"DEBUG - Début import - company_id: {company_id}, version: {version_name}")
+
         # 1. Créer la version GTFS
         version_payload = {
             "name": version_name,
@@ -41,13 +45,18 @@ async def import_gtfs(
         }
         
         version_res = requests.post(f"{XANO_BASE_URL}/gtfs_versions", json=version_payload, headers=headers)
-        
+        print(f"DEBUG - Version response status: {version_res.status_code}")
+
         if version_res.status_code != 200:
+            print("ERROR - Version creation failed:", version_res.text)
             return JSONResponse(status_code=400, content={"error": version_res.text})
 
-        version_id = version_res.json().get("id")
+        version_data = version_res.json()
+        version_id = version_data.get("id")
+        if not version_id:
+            return JSONResponse(status_code=400, content={"error": "No id in version response"})
 
-        # 2. Dézipper et traiter les fichiers
+        # 2. Dézipper et traiter
         content = await file.read()
         created_files = []
 
@@ -56,19 +65,21 @@ async def import_gtfs(
                 if filename.endswith(".txt"):
                     file_content = zip_ref.read(filename)
                     
-                    # Upload du fichier dans Xano
                     upload_res = requests.post(
                         f"{XANO_BASE_URL}/file",
                         files={"file": (filename, file_content, "text/plain")},
                         headers={"Authorization": f"Bearer {XANO_API_KEY}"}
                     )
                     
+                    print(f"DEBUG - Upload {filename} status: {upload_res.status_code}")
+
                     if upload_res.status_code != 200:
                         continue
                     
                     file_url = upload_res.json().get("url")
-                    
-                    # Créer gtfs_files
+                    if not file_url:
+                        continue
+
                     file_payload = {
                         "company_id": company_id,
                         "gtfs_version_id": version_id,
@@ -80,9 +91,9 @@ async def import_gtfs(
                     }
                     
                     file_res = requests.post(f"{XANO_BASE_URL}/gtfs_files", json=file_payload, headers=headers)
-                    file_id = file_res.json().get("id")
+                    file_data = file_res.json()
+                    file_id = file_data.get("id")
 
-                    # Créer le job
                     job_payload = {
                         "type": f"import_{filename.replace('.txt', '')}",
                         "file_id": file_id,
@@ -105,4 +116,5 @@ async def import_gtfs(
         }
 
     except Exception as e:
+        print("ERROR exception:", str(e))
         return JSONResponse(status_code=500, content={"error": str(e)})
