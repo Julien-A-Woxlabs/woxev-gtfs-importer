@@ -20,7 +20,7 @@ app.add_middleware(
 XANO_API_KEY = os.getenv("XANO_API_KEY")
 XANO_BASE_URL = os.getenv("XANO_BASE_URL")
 
-@app.post("/import-gtfs")
+@app.post("/import_gtfs")
 async def import_gtfs(
     file: UploadFile = File(...),
     company_id: str = Form(...),
