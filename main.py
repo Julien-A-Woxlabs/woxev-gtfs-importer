@@ -20,13 +20,6 @@ app.add_middleware(
 XANO_API_KEY = os.getenv("XANO_API_KEY")
 XANO_BASE_URL = os.getenv("XANO_BASE_URL")
 
-print("DEBUG - XANO_BASE_URL =", XANO_BASE_URL)   # pour voir dans les logs
-
-headers = {
-    "Authorization": f"Bearer {XANO_API_KEY}",
-    "Content-Type": "application/json"
-}
-
 @app.post("/upload/GTFS_import")
 async def import_gtfs(
     file: UploadFile = File(...),
@@ -34,9 +27,9 @@ async def import_gtfs(
     version_name: str = Form(...)
 ):
     try:
-        print(f"DEBUG - Début import - company_id: {company_id}, version: {version_name}")
+        print(f"DEBUG START - company: {company_id}, version: {version_name}, base_url: {XANO_BASE_URL}")
 
-        # 1. Créer la version GTFS
+        # 1. Créer version
         version_payload = {
             "name": version_name,
             "import_date": datetime.now().isoformat(),
@@ -44,77 +37,26 @@ async def import_gtfs(
             "company_id": company_id
         }
         
-        version_res = requests.post(f"{XANO_BASE_URL}/gtfs_versions", json=version_payload, headers=headers)
-        print(f"DEBUG - Version response status: {version_res.status_code}")
+        version_res = requests.post(f"{XANO_BASE_URL}/gtfs_versions", json=version_payload, headers={
+            "Authorization": f"Bearer {XANO_API_KEY}",
+            "Content-Type": "application/json"
+        })
+
+        print(f"DEBUG Version status: {version_res.status_code} - {version_res.text[:300]}")
 
         if version_res.status_code != 200:
-            print("ERROR - Version creation failed:", version_res.text)
             return JSONResponse(status_code=400, content={"error": version_res.text})
 
-        version_data = version_res.json()
-        version_id = version_data.get("id")
+        version_id = version_res.json().get("id")
         if not version_id:
-            return JSONResponse(status_code=400, content={"error": "No id in version response"})
+            return JSONResponse(status_code=400, content={"error": "No id returned from gtfs_versions"})
 
-        # 2. Dézipper et traiter
-        content = await file.read()
-        created_files = []
-
-        with zipfile.ZipFile(io.BytesIO(content)) as zip_ref:
-            for filename in zip_ref.namelist():
-                if filename.endswith(".txt"):
-                    file_content = zip_ref.read(filename)
-                    
-                    upload_res = requests.post(
-                        f"{XANO_BASE_URL}/file",
-                        files={"file": (filename, file_content, "text/plain")},
-                        headers={"Authorization": f"Bearer {XANO_API_KEY}"}
-                    )
-                    
-                    print(f"DEBUG - Upload {filename} status: {upload_res.status_code}")
-
-                    if upload_res.status_code != 200:
-                        continue
-                    
-                    file_url = upload_res.json().get("url")
-                    if not file_url:
-                        continue
-
-                    file_payload = {
-                        "company_id": company_id,
-                        "gtfs_version_id": version_id,
-                        "file_type": filename.replace(".txt", ""),
-                        "file_url": file_url,
-                        "original_name": filename,
-                        "uploaded_at": datetime.now().isoformat(),
-                        "status": "not_started"
-                    }
-                    
-                    file_res = requests.post(f"{XANO_BASE_URL}/gtfs_files", json=file_payload, headers=headers)
-                    file_data = file_res.json()
-                    file_id = file_data.get("id")
-
-                    job_payload = {
-                        "type": f"import_{filename.replace('.txt', '')}",
-                        "file_id": file_id,
-                        "status": "pending",
-                        "company_id": company_id,
-                        "created_at": datetime.now().isoformat(),
-                        "total_rows": 0,
-                        "processed_rows": 0
-                    }
-                    
-                    requests.post(f"{XANO_BASE_URL}/jobs", json=job_payload, headers=headers)
-                    
-                    created_files.append(filename)
-
+        # Pour l'instant on arrête là pour voir si on passe cette étape
         return {
-            "message": "Import lancé avec succès",
-            "version_id": version_id,
-            "files_count": len(created_files),
-            "files": created_files
+            "message": "Version créée avec succès",
+            "version_id": version_id
         }
 
     except Exception as e:
-        print("ERROR exception:", str(e))
+        print("EXCEPTION:", str(e))
         return JSONResponse(status_code=500, content={"error": str(e)})
