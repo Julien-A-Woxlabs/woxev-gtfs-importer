@@ -8,8 +8,8 @@ from datetime import datetime
 
 app = FastAPI()
 
-XANO_API_KEY = os.getenv("XANO_API_KEY")
-XANO_BASE_URL = "https://your-instance.xano.io/api:your-api-id"  # à remplacer
+XANO_API_KEY = os.getenv("eyJhbGciOiJBMjU2S1ciLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwiemlwIjoiREVGIn0.xslKVuIGFJ6cq_lJyoubyqIWFwsF2igIJRyAcnDRfBX5HsoHVElyeEiR7QaYSITtHGCi5Au-BPBlaR2ehMglgkvW7nCcG9uG.4UV1jL4IlGwf0AFCEmeNMg.Wf5cQ5d-tYYkn1NxvHxkYE0AZyq8zGbEH6Hoa9JKYmgvRfQoStIKe2oXXaQDhgdMYYt9SNkhm7BiVWxBHBtetduCJnZQ-Rvq_SOYL2jRaCzpqKuVCbjo6yQhrKLNLnrgIrr-pKpIDHwWNu3FXEHVlypZl9eLZsaC-O9tQZHEGPY.acmsTw0SlrPtcfL8A6GDd2Bnvfoui-04CD0-eGzILt0")
+XANO_BASE_URL = "https://xfnq-h4pb-gxqm.p7.xano.io/api:N1ylqXnK/uppload/GTFS_import"  # à remplacer
 
 @app.post("/import-gtfs")
 async def import_gtfs(
