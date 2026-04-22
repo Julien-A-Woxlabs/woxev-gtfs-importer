@@ -27,7 +27,7 @@ async def import_gtfs(
     version_name: str = Form(...)
 ):
     try:
-        # Création simple de la version
+        # Création version
         version_res = requests.post(
             f"{XANO_BASE_URL}/gtfs_versions",
             json={
@@ -43,7 +43,7 @@ async def import_gtfs(
 
         version_id = version_res.json().get("id")
 
-        # Upload des fichiers .txt
+        # Upload des .txt
         content = await file.read()
         count = 0
 
@@ -58,7 +58,6 @@ async def import_gtfs(
                     )
                     if upload.status_code == 200:
                         url = upload.json().get("url")
-                        # Enregistrer dans gtfs_files
                         requests.post(
                             f"{XANO_BASE_URL}/gtfs_files",
                             json={
