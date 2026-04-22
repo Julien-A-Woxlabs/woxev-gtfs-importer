@@ -8,7 +8,7 @@ from datetime import datetime
 app = FastAPI()
 
 XANO_API_KEY = os.getenv("XANO_API_KEY")
-XANO_BASE = os.getenv("XANO_BASE_URL")  # ex: https://mvpw34-42.xano.io/api:xxxxx
+XANO_BASE_URL = os.getenv("XANO_BASE_URL")
 
 headers = {
     "Authorization": f"Bearer {XANO_API_KEY}",
@@ -28,9 +28,14 @@ async def import_gtfs(
         "status": "active",
         "company_id": company_id
     }
-    version_res = requests.post(f"{XANO_BASE}/gtfs_versions", json=version_payload, headers=headers)
-    version_id = version_res.json()["id"]
+    
+    version_res = requests.post(f"{XANO_BASE_URL}/gtfs_versions", json=version_payload, headers=headers)
+    if version_res.status_code != 200:
+        return JSONResponse(status_code=400, content={"error": "Impossible de créer gtfs_versions"})
+    
+    version_id = version_res.json().get("id")
 
+    # 2. Dézipper et traiter les fichiers
     content = await file.read()
     created_files = []
 
@@ -39,12 +44,19 @@ async def import_gtfs(
             if filename.endswith(".txt"):
                 file_content = zip_ref.read(filename)
                 
-                # Upload du fichier vers Xano
-                files = {"file": (filename, file_content, "text/plain")}
-                upload_res = requests.post(f"{XANO_BASE}/file", files=files, headers={"Authorization": f"Bearer {XANO_API_KEY}"})
-                file_url = upload_res.json()["url"]
+                # Upload du fichier dans Xano
+                upload_res = requests.post(
+                    f"{XANO_BASE_URL}/file",
+                    files={"file": (filename, file_content, "text/plain")},
+                    headers={"Authorization": f"Bearer {XANO_API_KEY}"}
+                )
                 
-                # Créer l'enregistrement gtfs_files
+                if upload_res.status_code != 200:
+                    continue  # on saute ce fichier si erreur
+                
+                file_url = upload_res.json().get("url")
+                
+                # Créer l'enregistrement dans gtfs_files
                 file_payload = {
                     "company_id": company_id,
                     "gtfs_version_id": version_id,
@@ -54,19 +66,28 @@ async def import_gtfs(
                     "uploaded_at": datetime.now().isoformat(),
                     "status": "not_started"
                 }
-                file_res = requests.post(f"{XANO_BASE}/gtfs_files", json=file_payload, headers=headers)
-                file_id = file_res.json()["id"]
                 
-                # Créer le job
+                file_res = requests.post(f"{XANO_BASE_URL}/gtfs_files", json=file_payload, headers=headers)
+                file_id = file_res.json().get("id")
+
+                # Créer le job pour la Background Task
                 job_payload = {
                     "type": f"import_{filename.replace('.txt', '')}",
                     "file_id": file_id,
                     "status": "pending",
                     "company_id": company_id,
-                    "created_at": datetime.now().isoformat()
+                    "created_at": datetime.now().isoformat(),
+                    "total_rows": 0,        # on mettra à jour plus tard
+                    "processed_rows": 0
                 }
-                requests.post(f"{XANO_BASE}/jobs", json=job_payload, headers=headers)
+                
+                requests.post(f"{XANO_BASE_URL}/jobs", json=job_payload, headers=headers)
                 
                 created_files.append(filename)
 
-    return {"message": "Import lancé", "files": created_files, "version_id": version_id}
+    return {
+        "message": "Import lancé avec succès",
+        "version_id": version_id,
+        "files_count": len(created_files),
+        "files": created_files
+    }
