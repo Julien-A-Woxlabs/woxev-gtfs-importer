@@ -18,7 +18,7 @@ headers = {
 @app.post("/import-gtfs")
 async def import_gtfs(
     file: UploadFile = File(...),
-    company_id: int = Form(...),
+    company_id: str = Form(...),
     version_name: str = Form(...)
 ):
     # 1. Créer la version GTFS
