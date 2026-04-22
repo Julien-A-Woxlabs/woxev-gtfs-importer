@@ -27,7 +27,7 @@ async def import_gtfs(
     version_name: str = Form(...)
 ):
     try:
-        print(f"DEBUG START - company: {company_id} | version: {version_name} | base: {XANO_BASE_URL}")
+        print(f"DEBUG START - company: {company_id} | version: {version_name}")
 
         # 1. Créer la version GTFS
         version_payload = {
@@ -51,7 +51,7 @@ async def import_gtfs(
         version_id = version_res.json().get("id")
         print(f"DEBUG Version ID: {version_id}")
 
-        # 2. Traiter les fichiers du ZIP
+        # 2. Traiter les fichiers
         content = await file.read()
         created_files = []
 
@@ -60,7 +60,7 @@ async def import_gtfs(
                 if filename.endswith(".txt"):
                     file_content = zip_ref.read(filename)
                     
-                    # Upload du fichier
+                    # Upload fichier
                     upload_res = requests.post(
                         f"{XANO_BASE_URL}/file",
                         files={"file": (filename, file_content, "text/plain")},
