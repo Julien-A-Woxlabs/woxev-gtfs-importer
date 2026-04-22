@@ -15,7 +15,7 @@ headers = {
     "Content-Type": "application/json"
 }
 
-@app.post("/import-gtfs")
+@app.post("/GTFS_import")
 async def import_gtfs(
     file: UploadFile = File(...),
     company_id: str = Form(...),
