@@ -27,9 +27,9 @@ async def import_gtfs(
     version_name: str = Form(...)
 ):
     try:
-        print(f"DEBUG START - company: {company_id}, version: {version_name}, base_url: {XANO_BASE_URL}")
+        print(f"DEBUG START - company_id: {company_id} | version: {version_name}")
 
-        # 1. Créer version
+        # 1. Créer la version GTFS
         version_payload = {
             "name": version_name,
             "import_date": datetime.now().isoformat(),
@@ -42,19 +42,79 @@ async def import_gtfs(
             "Content-Type": "application/json"
         })
 
-        print(f"DEBUG Version status: {version_res.status_code} - {version_res.text[:300]}")
-
         if version_res.status_code != 200:
+            print("ERROR Version:", version_res.text)
             return JSONResponse(status_code=400, content={"error": version_res.text})
 
         version_id = version_res.json().get("id")
-        if not version_id:
-            return JSONResponse(status_code=400, content={"error": "No id returned from gtfs_versions"})
+        print(f"DEBUG Version créée - ID: {version_id}")
 
-        # Pour l'instant on arrête là pour voir si on passe cette étape
+        # 2. Dézipper et traiter les fichiers
+        content = await file.read()
+        created_files = []
+
+        with zipfile.ZipFile(io.BytesIO(content)) as zip_ref:
+            for filename in zip_ref.namelist():
+                if filename.endswith(".txt"):
+                    file_content = zip_ref.read(filename)
+                    
+                    # Upload fichier
+                    upload_res = requests.post(
+                        f"{XANO_BASE_URL}/file",
+                        files={"file": (filename, file_content, "text/plain")},
+                        headers={"Authorization": f"Bearer {XANO_API_KEY}"}
+                    )
+
+                    if upload_res.status_code != 200:
+                        print(f"ERROR Upload {filename}:", upload_res.text)
+                        continue
+
+                    file_url = upload_res.json().get("url")
+                    print(f"DEBUG Upload OK - {filename} → {file_url[:80]}...")
+
+                    # Créer gtfs_files
+                    file_payload = {
+                        "company_id": company_id,
+                        "gtfs_version_id": version_id,
+                        "file_type": filename.replace(".txt", ""),
+                        "file_url": file_url,
+                        "original_name": filename,
+                        "uploaded_at": datetime.now().isoformat(),
+                        "status": "not_started"
+                    }
+                    
+                    file_res = requests.post(f"{XANO_BASE_URL}/gtfs_files", json=file_payload, headers={
+                        "Authorization": f"Bearer {XANO_API_KEY}",
+                        "Content-Type": "application/json"
+                    })
+
+                    file_id = file_res.json().get("id")
+
+                    # Créer le job
+                    job_payload = {
+                        "type": f"import_{filename.replace('.txt', '')}",
+                        "file_id": file_id,
+                        "status": "pending",
+                        "company_id": company_id,
+                        "created_at": datetime.now().isoformat(),
+                        "total_rows": 0,
+                        "processed_rows": 0
+                    }
+                    
+                    requests.post(f"{XANO_BASE_URL}/jobs", json=job_payload, headers={
+                        "Authorization": f"Bearer {XANO_API_KEY}",
+                        "Content-Type": "application/json"
+                    })
+
+                    created_files.append(filename)
+                    print(f"DEBUG Job créé pour {filename}")
+
+        print(f"SUCCESS - {len(created_files)} fichiers traités")
         return {
-            "message": "Version créée avec succès",
-            "version_id": version_id
+            "message": "Import lancé avec succès",
+            "version_id": version_id,
+            "files_count": len(created_files),
+            "files": created_files
         }
 
     except Exception as e:
