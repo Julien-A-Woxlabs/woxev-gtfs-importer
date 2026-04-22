@@ -6,6 +6,15 @@ import os
 from datetime import datetime
 
 app = FastAPI()
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],           # Pour le moment on autorise tout (à sécuriser plus tard)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 XANO_API_KEY = os.getenv("XANO_API_KEY")
 XANO_BASE_URL = os.getenv("XANO_BASE_URL")
