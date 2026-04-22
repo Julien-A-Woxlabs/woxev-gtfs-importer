@@ -20,14 +20,14 @@ app.add_middleware(
 XANO_API_KEY = os.getenv("XANO_API_KEY")
 XANO_BASE_URL = os.getenv("XANO_BASE_URL")
 
-@app.post("/Import_GTFS")
+@app.post("/import-gtfs")
 async def import_gtfs(
     file: UploadFile = File(...),
     company_id: str = Form(...),
     version_name: str = Form(...)
 ):
     try:
-        print(f"DEBUG START - company_id: {company_id} | version: {version_name}")
+        print(f"DEBUG START - company: {company_id} | version: {version_name} | base: {XANO_BASE_URL}")
 
         # 1. Créer la version GTFS
         version_payload = {
@@ -42,14 +42,16 @@ async def import_gtfs(
             "Content-Type": "application/json"
         })
 
+        print(f"DEBUG Version status: {version_res.status_code}")
+
         if version_res.status_code != 200:
             print("ERROR Version:", version_res.text)
             return JSONResponse(status_code=400, content={"error": version_res.text})
 
         version_id = version_res.json().get("id")
-        print(f"DEBUG Version créée - ID: {version_id}")
+        print(f"DEBUG Version ID: {version_id}")
 
-        # 2. Dézipper et traiter les fichiers
+        # 2. Traiter les fichiers du ZIP
         content = await file.read()
         created_files = []
 
@@ -58,19 +60,19 @@ async def import_gtfs(
                 if filename.endswith(".txt"):
                     file_content = zip_ref.read(filename)
                     
-                    # Upload fichier
+                    # Upload du fichier
                     upload_res = requests.post(
                         f"{XANO_BASE_URL}/file",
                         files={"file": (filename, file_content, "text/plain")},
                         headers={"Authorization": f"Bearer {XANO_API_KEY}"}
                     )
 
+                    print(f"DEBUG Upload {filename} status: {upload_res.status_code}")
+
                     if upload_res.status_code != 200:
-                        print(f"ERROR Upload {filename}:", upload_res.text)
                         continue
 
                     file_url = upload_res.json().get("url")
-                    print(f"DEBUG Upload OK - {filename} → {file_url[:80]}...")
 
                     # Créer gtfs_files
                     file_payload = {
